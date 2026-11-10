@@ -13,6 +13,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import dev.oob.chaos.i18n.Localized;
 import dev.oob.chaos.live.ChaosEvent;
 import dev.oob.chaos.twist.Genre;
 import dev.oob.chaos.twist.TwistEngine;
@@ -49,8 +50,10 @@ public class MutatorDirector {
 		this.duration = duration;
 	}
 
-	public MutatorState state() {
-		return current().map(a -> MutatorState.of(a.mutator(), a.genre(), a.endsAt())).orElse(MutatorState.NONE);
+	public Localized<MutatorState> state() {
+		Active a = current().orElse(null);
+		return Localized.of(
+				lang -> a == null ? MutatorState.NONE : MutatorState.of(a.mutator(), a.genre(), a.endsAt(), lang));
 	}
 
 	public Optional<Mutator> activeMutator() {
@@ -106,7 +109,7 @@ public class MutatorDirector {
 	}
 
 	private void announce() {
-		MutatorState state = state();
+		Localized<MutatorState> state = state();
 		events.publishEvent(new ChaosEvent("mutator", state));
 		events.publishEvent(new MutatorChanged(state));
 	}

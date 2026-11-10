@@ -12,6 +12,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import dev.oob.chaos.i18n.Lang;
 import dev.oob.chaos.live.ChaosEvent;
 import dev.oob.chaos.twist.Genre;
 import dev.oob.chaos.twist.TwistEngine;
@@ -53,7 +54,7 @@ class MutatorDirectorTest {
 
 		assertThat(director.hypeMultiplier()).isEqualTo(2);
 		assertThat(director.lockedGenre()).as("genre only applies to a lock").isEmpty();
-		assertThat(director.state().endsAt()).isEqualTo(clock.now.plusSeconds(45));
+		assertThat(director.state().in(Lang.EN).endsAt()).isEqualTo(clock.now.plusSeconds(45));
 
 		clock.now = clock.now.plusSeconds(46);
 		director.expire();
@@ -67,7 +68,8 @@ class MutatorDirectorTest {
 		director.start(Mutator.GENRE_LOCK, Genre.HEIST);
 
 		assertThat(director.lockedGenre()).contains(Genre.HEIST);
-		assertThat(director.state().title()).isEqualTo("Genre Lock: Heist");
+		assertThat(director.state().in(Lang.EN).title()).isEqualTo("Genre Lock: Heist");
+		assertThat(director.state().in(Lang.DE).title()).isEqualTo("Genre-Sperre: Raubzug");
 	}
 
 	@Test
@@ -82,7 +84,7 @@ class MutatorDirectorTest {
 	private List<MutatorState> mutatorStates() {
 		return published.stream()
 			.filter(ChaosEvent.class::isInstance)
-			.map(e -> (MutatorState) ((ChaosEvent) e).payload())
+			.map(e -> (MutatorState) ((ChaosEvent) e).payloadIn(Lang.EN))
 			.toList();
 	}
 

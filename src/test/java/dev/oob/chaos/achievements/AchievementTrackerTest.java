@@ -15,6 +15,7 @@ import dev.oob.chaos.board.PlayerAction.Kind;
 import dev.oob.chaos.board.ThingView;
 import dev.oob.chaos.board.Tier;
 import dev.oob.chaos.board.WaveTriggered;
+import dev.oob.chaos.i18n.Lang;
 import dev.oob.chaos.live.ChaosEvent;
 import dev.oob.chaos.mutator.Mutator;
 import dev.oob.chaos.player.Player;
@@ -38,9 +39,21 @@ class AchievementTrackerTest {
 		tracker.on(action(ada, Kind.SUBMIT, false));
 
 		assertThat(unlockedCodes()).containsExactly("BOREDOM_SLAYER");
-		assertThat(((AchievementUnlocked) ((ChaosEvent) published.getFirst()).payload()).playerTag())
+		assertThat(unlocked(published.getFirst(), Lang.EN).playerTag())
 			.isEqualTo(ada.tag())
 			.isNotEqualTo(ada.id());
+	}
+
+	@Test
+	void broadcastsEveryUnlockInEveryLanguage() {
+		AchievementTracker tracker = new AchievementTracker(published::add, NOON);
+
+		tracker.on(action(ada, Kind.SUBMIT, false));
+
+		assertThat(unlocked(published.getFirst(), Lang.DE).title()).isEqualTo("Langeweile-Bezwinger");
+		assertThat(unlocked(published.getFirst(), Lang.EN).title()).isEqualTo("Boredom Slayer");
+		assertThat(tracker.forPlayer(ada, Lang.DE).getFirst().description())
+			.isEqualTo("Reiche dein erstes langweiliges Ding ein");
 	}
 
 	@Test
@@ -53,7 +66,7 @@ class AchievementTrackerTest {
 		tracker.on(new WaveTriggered(ada));
 
 		assertThat(unlockedCodes()).containsExactly("BOREDOM_SLAYER", "SHAMELESS", "RENAISSANCE", "WAVE_RIDER");
-		assertThat(tracker.forPlayer(ada)).filteredOn(AchievementView::unlocked).hasSize(4);
+		assertThat(tracker.forPlayer(ada, Lang.EN)).filteredOn(AchievementView::unlocked).hasSize(4);
 	}
 
 	@Test
@@ -84,7 +97,7 @@ class AchievementTrackerTest {
 		tracker.on(action(Player.ANONYMOUS, Kind.SUBMIT, false));
 
 		assertThat(published).isEmpty();
-		assertThat(tracker.forPlayer(Player.ANONYMOUS)).noneMatch(AchievementView::unlocked);
+		assertThat(tracker.forPlayer(Player.ANONYMOUS, Lang.EN)).noneMatch(AchievementView::unlocked);
 	}
 
 	private static PlayerAction action(Player player, Kind kind, boolean ownThing) {
@@ -96,9 +109,11 @@ class AchievementTrackerTest {
 	}
 
 	private List<String> unlockedCodes() {
-		return published.stream()
-			.map(e -> ((AchievementUnlocked) ((ChaosEvent) e).payload()).code())
-			.toList();
+		return published.stream().map(e -> unlocked(e, Lang.EN).code()).toList();
+	}
+
+	private static AchievementUnlocked unlocked(Object event, Lang lang) {
+		return (AchievementUnlocked) ((ChaosEvent) event).payloadIn(lang);
 	}
 
 }

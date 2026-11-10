@@ -16,7 +16,7 @@ import jakarta.validation.Payload;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ActuallyBoring {
 
-	String message() default "That already sounds fun. Bring us something truly boring.";
+	String message() default "{thing.original.too-fun}";
 
 	Class<?>[] groups() default {};
 

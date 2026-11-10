@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component;
 import dev.oob.chaos.board.PlayerAction;
 import dev.oob.chaos.board.Tier;
 import dev.oob.chaos.board.WaveTriggered;
+import dev.oob.chaos.i18n.Lang;
+import dev.oob.chaos.i18n.Localized;
 import dev.oob.chaos.live.ChaosEvent;
 import dev.oob.chaos.player.Player;
 
@@ -71,10 +73,10 @@ public class AchievementTracker {
 		record(wave.player(), p -> p.triggeredWave = true);
 	}
 
-	public List<AchievementView> forPlayer(Player player) {
+	public List<AchievementView> forPlayer(Player player, Lang lang) {
 		PlayerProgress mine = player.isTracked() ? progress.get(player.id()) : null;
 		return Arrays.stream(Achievement.values())
-			.map(a -> AchievementView.of(a, mine != null && mine.has(a)))
+			.map(a -> AchievementView.of(a, mine != null && mine.has(a), lang))
 			.toList();
 	}
 
@@ -84,7 +86,8 @@ public class AchievementTracker {
 		}
 		progress.computeIfAbsent(player.id(), id -> new PlayerProgress())
 			.record(change)
-			.forEach(a -> events.publishEvent(new ChaosEvent("achievement", AchievementUnlocked.of(player, a))));
+			.forEach(a -> events.publishEvent(
+					new ChaosEvent("achievement", Localized.of(lang -> AchievementUnlocked.of(player, a, lang)))));
 	}
 
 }

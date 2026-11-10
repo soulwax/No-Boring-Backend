@@ -9,7 +9,8 @@ import jakarta.validation.ConstraintValidatorContext;
 public class ActuallyBoringValidator implements ConstraintValidator<ActuallyBoring, String> {
 
 	static final Set<String> TOO_FUN = Set.of("party", "rollercoaster", "fireworks", "skydiving", "concert",
-			"festival", "dragon", "laser", "volcano");
+			"festival", "dragon", "laser", "volcano", "achterbahn", "feuerwerk", "fallschirm", "konzert", "drache",
+			"vulkan");
 
 	@Override
 	public boolean isValid(String value, ConstraintValidatorContext context) {

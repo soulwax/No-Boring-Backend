@@ -20,6 +20,7 @@ import dev.oob.chaos.achievements.AchievementView;
 import dev.oob.chaos.board.ChaosMeter;
 import dev.oob.chaos.board.ChaosService;
 import dev.oob.chaos.board.ThingView;
+import dev.oob.chaos.i18n.Lang;
 import dev.oob.chaos.live.ChaosBroadcaster;
 import dev.oob.chaos.live.ChaosEvent;
 import dev.oob.chaos.live.Chronicle;
@@ -50,39 +51,40 @@ class ChaosController {
 	}
 
 	@GetMapping("/things")
-	List<ThingView> board() {
-		return chaos.board();
+	List<ThingView> board(Lang lang) {
+		return chaos.board().in(lang);
 	}
 
 	@PostMapping("/things")
-	ResponseEntity<ThingView> submit(@Valid @RequestBody SubmitRequest request, Player player) {
-		ThingView created = chaos.submit(request.original(), request.author(), request.genre(), player);
+	ResponseEntity<ThingView> submit(@Valid @RequestBody SubmitRequest request, Player player, Lang lang) {
+		ThingView created = chaos.submit(request.original(), request.author(), request.genre(), player, lang);
 		return ResponseEntity.created(URI.create("/api/things/" + created.id())).body(created);
 	}
 
 	@PostMapping("/things/{id}/hype")
-	ThingView hype(@PathVariable long id, Player player) {
-		return chaos.hype(id, player);
+	ThingView hype(@PathVariable long id, Player player, Lang lang) {
+		return chaos.hype(id, player, lang);
 	}
 
 	@PostMapping("/things/{id}/reroll")
-	ThingView reroll(@PathVariable long id, Player player) {
-		return chaos.reroll(id, player);
+	ThingView reroll(@PathVariable long id, Player player, Lang lang) {
+		return chaos.reroll(id, player, lang);
 	}
 
 	@GetMapping("/meter")
-	ChaosMeter meter() {
-		return chaos.meter();
+	ChaosMeter meter(Lang lang) {
+		return chaos.meter().in(lang);
 	}
 
 	@GetMapping("/achievements")
-	List<AchievementView> achievements(Player player) {
-		return achievements.forPlayer(player);
+	List<AchievementView> achievements(Player player, Lang lang) {
+		return achievements.forPlayer(player, lang);
 	}
 
+	/** Open with {@code ?lang=en} for English; everything on this stream then arrives in that language. */
 	@GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-	SseEmitter stream() {
-		return broadcaster.subscribe(List.of(
+	SseEmitter stream(Lang lang) {
+		return broadcaster.subscribe(lang, List.of(
 				ChaosEvent.board(chaos.board()),
 				ChaosEvent.meter(chaos.meter()),
 				new ChaosEvent("mutator", mutators.state()),

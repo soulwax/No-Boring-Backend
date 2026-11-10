@@ -9,6 +9,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import dev.oob.chaos.i18n.Lang;
+import dev.oob.chaos.i18n.Localized;
 import dev.oob.chaos.live.ChaosEvent;
 import dev.oob.chaos.mutator.Mutator;
 import dev.oob.chaos.mutator.MutatorDirector;
@@ -51,39 +53,42 @@ public class ChaosService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<ThingView> board() {
-		return things.findTop50ByOrderByHypeDescCreatedAtDesc().stream().map(ThingView::of).toList();
+	public Localized<List<ThingView>> board() {
+		List<BoringThing> top = things.findTop50ByOrderByHypeDescCreatedAtDesc();
+		return Localized.of(lang -> top.stream().map(thing -> ThingView.of(thing, lang)).toList());
 	}
 
 	@Transactional(readOnly = true)
-	public ChaosMeter meter() {
-		return ChaosMeter.from(things.totalHype(), things.count());
+	public Localized<ChaosMeter> meter() {
+		long totalHype = things.totalHype();
+		long count = things.count();
+		return Localized.of(lang -> ChaosMeter.from(totalHype, count, lang));
 	}
 
 	/** @param requested the genre the player picked, or {@code null} for a surprise */
-	public ThingView submit(String original, String author, Genre requested, Player player) {
+	public ThingView submit(String original, String author, Genre requested, Player player, Lang lang) {
 		String name = (author == null || author.isBlank()) ? player.name() : author.strip();
 		Genre genre = mutators.lockedGenre()
 			.orElseGet(() -> requested != null ? requested : twistEngine.pickFrom(GENRES));
 		BoringThing thing = things.save(
-				new BoringThing(original.strip(), twistEngine.twist(original, genre), name, genre, player.id()));
-		return changed(thing, player, PlayerAction.Kind.SUBMIT, null);
+				new BoringThing(original.strip(), twistEngine.roll(genre), name, genre, player.id()));
+		return changed(thing, player, lang, PlayerAction.Kind.SUBMIT, null);
 	}
 
-	public ThingView hype(long id, Player player) {
+	public ThingView hype(long id, Player player, Lang lang) {
 		BoringThing thing = find(id);
 		thing.addHype(HYPE_PER_CLICK * mutators.hypeMultiplier());
 		if (mutators.isActive(Mutator.TWIST_TORNADO)) {
-			thing.retwist(twistEngine.twist(thing.getOriginal(), genreFor(thing)));
+			thing.retwist(twistEngine.roll(genreFor(thing)));
 		}
-		Tier promoted = thing.evolve(tier -> twistEngine.pickFrom(tier.escalations())).orElse(null);
-		return changed(thing, player, PlayerAction.Kind.HYPE, promoted);
+		Tier promoted = thing.evolve(this::loreFor).orElse(null);
+		return changed(thing, player, lang, PlayerAction.Kind.HYPE, promoted);
 	}
 
-	public ThingView reroll(long id, Player player) {
+	public ThingView reroll(long id, Player player, Lang lang) {
 		BoringThing thing = find(id);
-		thing.retwist(twistEngine.twist(thing.getOriginal(), genreFor(thing)));
-		return changed(thing, player, PlayerAction.Kind.REROLL, null);
+		thing.retwist(twistEngine.roll(genreFor(thing)));
+		return changed(thing, player, lang, PlayerAction.Kind.REROLL, null);
 	}
 
 	/** Hype fades on its own, so the board is never the same twice. Unless time is frozen. */
@@ -93,10 +98,10 @@ public class ChaosService {
 			return;
 		}
 		if (things.decayHype(DECAY_PER_TICK) > 0) {
-			ChaosMeter meter = meter();
+			Localized<ChaosMeter> meter = meter();
 			events.publishEvent(ChaosEvent.board(board()));
 			events.publishEvent(ChaosEvent.meter(meter));
-			if (meter.level() < WAVE_REARM_LEVEL) {
+			if (meter.in(Lang.DEFAULT).level() < WAVE_REARM_LEVEL) {
 				waveArmed.set(true);
 			}
 		}
@@ -107,24 +112,30 @@ public class ChaosService {
 		return mutators.lockedGenre().orElse(thing.getGenre());
 	}
 
-	private ThingView changed(BoringThing thing, Player player, PlayerAction.Kind kind, Tier promoted) {
+	private Lore loreFor(Tier tier) {
+		return new Lore(tier, twistEngine.pickIndex(tier.escalations()));
+	}
+
+	/** @param lang the language the acting player reads, for the view they get back */
+	private ThingView changed(BoringThing thing, Player player, Lang lang, PlayerAction.Kind kind, Tier promoted) {
 		things.flush();
-		ThingView view = ThingView.of(thing);
-		ChaosMeter meter = meter();
+		Localized<ThingView> view = Localized.of(l -> ThingView.of(thing, l));
+		Localized<ChaosMeter> meter = meter();
+		int level = meter.in(Lang.DEFAULT).level();
 		events.publishEvent(ChaosEvent.thing(view));
 		events.publishEvent(ChaosEvent.meter(meter));
-		events.publishEvent(new PlayerAction(player, kind, view, thing.isOwnedBy(player), promoted,
+		events.publishEvent(new PlayerAction(player, kind, view.in(lang), thing.isOwnedBy(player), promoted,
 				mutators.activeMutator().orElse(null)));
 
-		if (meter.level() >= WAVE_LEVEL && waveArmed.compareAndSet(true, false)) {
+		if (level >= WAVE_LEVEL && waveArmed.compareAndSet(true, false)) {
 			events.publishEvent(new WaveTriggered(player));
 			events.publishEvent(new ChaosEvent("wave", Map.of("by", player.name())));
 			mutators.startRandom();
 		}
-		else if (meter.level() < WAVE_REARM_LEVEL) {
+		else if (level < WAVE_REARM_LEVEL) {
 			waveArmed.set(true);
 		}
-		return view;
+		return view.in(lang);
 	}
 
 	private BoringThing find(long id) {

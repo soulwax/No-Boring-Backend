@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.function.Function;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
@@ -12,11 +13,15 @@ import org.springframework.stereotype.Component;
 
 import dev.oob.chaos.board.PlayerAction;
 import dev.oob.chaos.board.WaveTriggered;
+import dev.oob.chaos.i18n.Lang;
+import dev.oob.chaos.i18n.Localized;
+import dev.oob.chaos.i18n.Text;
 import dev.oob.chaos.mutator.MutatorChanged;
+import dev.oob.chaos.mutator.MutatorState;
 
 /**
- * The room's story so far: turns domain events into short human-readable lines,
- * broadcasts each one, and remembers the latest few for anyone who joins late.
+ * The room's story so far: turns domain events into short human-readable lines (in every
+ * language), broadcasts each one, and remembers the latest few for anyone who joins late.
  * Plain hypes are deliberately left out (far too chatty); evolutions are not.
  */
 @Component
@@ -25,11 +30,35 @@ public class Chronicle {
 	public record Entry(String emoji, String text, Instant at) {
 	}
 
+	private record Line(String emoji, Localized<String> text, Instant at) {
+
+		Entry in(Lang lang) {
+			return new Entry(emoji, text.in(lang), at);
+		}
+
+	}
+
 	static final int KEEP = 20;
 
 	private static final int MAX_QUOTE = 40;
 
-	private final Deque<Entry> recent = new ArrayDeque<>();
+	private static final Text SUBMITTED = Text.of("%s hat %s entlangweilt", "%s un-bored %s");
+
+	private static final Text REROLLED = Text.of("%s hat %s umgekrempelt", "%s plot-twisted %s");
+
+	/** Arguments: thing, tier, player */
+	private static final Text EVOLVED = Text.of("%1$s ist dank %3$s jetzt %2$s", "%1$s evolved to %2$s thanks to %3$s");
+
+	private static final Text WAVE = Text.of("%s hat eine Chaoswelle ausgelöst", "%s unleashed a Chaos Wave");
+
+	private static final Text MUTATOR_BEGAN = Text.of("%s hat begonnen", "%s has begun");
+
+	private static final Text CALM = Text.of("Der Mutator ist verflogen. Die Ruhe kehrt zurück (vorerst)",
+			"The mutator wore off. Calm returns (for now)");
+
+	private static final Text QUOTE = Text.of("„%s“", "“%s”");
+
+	private final Deque<Line> recent = new ArrayDeque<>();
 
 	private final ApplicationEventPublisher events;
 
@@ -41,21 +70,23 @@ public class Chronicle {
 	}
 
 	/** Newest first. */
-	public synchronized List<Entry> recent() {
-		return List.copyOf(recent);
+	public synchronized Localized<List<Entry>> recent() {
+		List<Line> lines = List.copyOf(recent);
+		return Localized.of(lang -> lines.stream().map(line -> line.in(lang)).toList());
 	}
 
 	@EventListener
 	void on(PlayerAction action) {
 		String who = action.player().name();
-		String what = quote(action.thing().original());
+		String original = action.thing().original();
 		switch (action.kind()) {
-			case SUBMIT -> write(action.thing().genre().emoji(), "%s un-bored %s".formatted(who, what));
-			case REROLL -> write("🎲", "%s plot-twisted %s".formatted(who, what));
+			case SUBMIT -> write(action.thing().genre().emoji(),
+					lang -> SUBMITTED.in(lang).formatted(who, quote(original, lang)));
+			case REROLL -> write("🎲", lang -> REROLLED.in(lang).formatted(who, quote(original, lang)));
 			case HYPE -> {
 				if (action.promotedTo() != null) {
-					write(action.promotedTo().emoji(),
-							"%s evolved to %s thanks to %s".formatted(what, action.promotedTo().label(), who));
+					write(action.promotedTo().emoji(), lang -> EVOLVED.in(lang)
+						.formatted(quote(original, lang), action.promotedTo().label().in(lang), who));
 				}
 			}
 		}
@@ -63,33 +94,34 @@ public class Chronicle {
 
 	@EventListener
 	void on(WaveTriggered wave) {
-		write("🌊", "%s unleashed a Chaos Wave".formatted(wave.player().name()));
+		write("🌊", lang -> WAVE.in(lang).formatted(wave.player().name()));
 	}
 
 	@EventListener
 	void on(MutatorChanged change) {
-		if (change.state().active()) {
-			write(change.state().emoji(), "%s has begun".formatted(change.state().title()));
+		MutatorState state = change.state().in(Lang.DEFAULT);
+		if (state.active()) {
+			write(state.emoji(), lang -> MUTATOR_BEGAN.in(lang).formatted(change.state().in(lang).title()));
 		}
 		else {
-			write("🕰️", "The mutator wore off. Calm returns (for now)");
+			write("🕰️", CALM::in);
 		}
 	}
 
-	private void write(String emoji, String text) {
-		Entry entry = new Entry(emoji, text, clock.instant());
+	private void write(String emoji, Function<Lang, String> text) {
+		Line line = new Line(emoji, Localized.of(text), clock.instant());
 		synchronized (this) {
-			recent.addFirst(entry);
+			recent.addFirst(line);
 			while (recent.size() > KEEP) {
 				recent.removeLast();
 			}
 		}
-		events.publishEvent(new ChaosEvent("activity", entry));
+		events.publishEvent(new ChaosEvent("activity", (Localized<Entry>) line::in));
 	}
 
-	private static String quote(String text) {
+	private static String quote(String text, Lang lang) {
 		String shortened = text.length() > MAX_QUOTE ? text.substring(0, MAX_QUOTE - 1) + "…" : text;
-		return "“" + shortened + "”";
+		return QUOTE.in(lang).formatted(shortened);
 	}
 
 }

@@ -35,26 +35,26 @@ class PlayerArgumentResolver implements HandlerMethodArgumentResolver {
 	public Player resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
 			NativeWebRequest request, WebDataBinderFactory binderFactory) {
 		String id = request.getHeader(ID_HEADER);
-		String name = name(request.getHeader(NAME_HEADER));
+		String name = name(request.getHeader(NAME_HEADER), Player.defaultName(LangArgumentResolver.resolve(request)));
 		if (id == null || !VALID_ID.matcher(id).matches()) {
 			return new Player(null, name);
 		}
 		return new Player(id, name);
 	}
 
-	private static String name(String header) {
+	private static String name(String header, String fallback) {
 		if (header == null) {
-			return Player.DEFAULT_NAME;
+			return fallback;
 		}
 		String decoded;
 		try {
 			decoded = URLDecoder.decode(header, StandardCharsets.UTF_8).strip();
 		}
 		catch (IllegalArgumentException ex) {
-			return Player.DEFAULT_NAME;
+			return fallback;
 		}
 		if (decoded.isEmpty()) {
-			return Player.DEFAULT_NAME;
+			return fallback;
 		}
 		return decoded.length() > MAX_NAME ? decoded.substring(0, MAX_NAME) : decoded;
 	}

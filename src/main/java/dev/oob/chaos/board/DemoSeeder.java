@@ -5,10 +5,11 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import dev.oob.chaos.i18n.Lang;
 import dev.oob.chaos.player.Player;
 import dev.oob.chaos.twist.Genre;
 
-/** Makes sure nobody ever opens the app to an empty (boring) board. */
+/** Makes sure nobody ever opens the app to an empty (boring) board. Seeded in the default language. */
 @Component
 @ConditionalOnProperty(name = "chaos.seed-demo-data", havingValue = "true", matchIfMissing = true)
 class DemoSeeder implements ApplicationRunner {
@@ -27,11 +28,11 @@ class DemoSeeder implements ApplicationRunner {
 		if (things.count() > 0) {
 			return;
 		}
-		chaos.submit("filing my taxes", "Accountant Ada", Genre.NOIR, Player.ANONYMOUS);
-		chaos.submit("waiting for the bus", "Commuter Kai", Genre.NATURE_DOC, Player.ANONYMOUS);
-		chaos.submit("folding laundry", "Sock Wizard", Genre.MEDIEVAL, Player.ANONYMOUS);
-		chaos.submit("a two-hour status meeting", "Product Pat", Genre.HEIST, Player.ANONYMOUS);
-		chaos.submit("defrosting the freezer", null, Genre.SPACE_OPERA, Player.ANONYMOUS);
+		chaos.submit("die Steuererklärung machen", "Buchhalterin Ada", Genre.NOIR, Player.ANONYMOUS, Lang.DEFAULT);
+		chaos.submit("auf den Bus warten", "Pendler Kai", Genre.NATURE_DOC, Player.ANONYMOUS, Lang.DEFAULT);
+		chaos.submit("Wäsche zusammenlegen", "Sockenzauberer", Genre.MEDIEVAL, Player.ANONYMOUS, Lang.DEFAULT);
+		chaos.submit("ein zweistündiges Status-Meeting", "Product Pat", Genre.HEIST, Player.ANONYMOUS, Lang.DEFAULT);
+		chaos.submit("den Gefrierschrank abtauen", null, Genre.SPACE_OPERA, Player.ANONYMOUS, Lang.DEFAULT);
 	}
 
 }

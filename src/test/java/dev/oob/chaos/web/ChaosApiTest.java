@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -39,24 +40,47 @@ class ChaosApiTest {
 	}
 
 	@Test
-	void submittingABoringThingReturnsItTwisted() throws Exception {
+	void submittingABoringThingReturnsItTwistedInGermanByDefault() throws Exception {
 		mvc.perform(post("/api/things").contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"original": "sorting receipts", "author": "Tester", "genre": "CLASSIC"}"""))
+						{"original": "Belege sortieren", "genre": "CLASSIC"}"""))
 			.andExpect(status().isCreated())
 			.andExpect(header().string("Location", startsWith("/api/things/")))
-			.andExpect(jsonPath("$.twist").value(startsWith("Sorting receipts ")))
-			.andExpect(jsonPath("$.author").value("Tester"))
+			.andExpect(jsonPath("$.twist").value(startsWith("Belege sortieren – ")))
+			.andExpect(jsonPath("$.author").value("Anonyme Legende"))
 			.andExpect(jsonPath("$.hype").value(0));
+	}
+
+	@Test
+	void englishIsOneHeaderOrQueryParameterAway() throws Exception {
+		Integer id = submit("""
+				{"original": "sorting receipts", "author": "Tester", "genre": "NOIR"}""");
+
+		mvc.perform(post("/api/things/{id}/reroll", id).header(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9"))
+			.andExpect(jsonPath("$.twist").value(startsWith("It was raining again. Sorting receipts ")))
+			.andExpect(jsonPath("$.author").value("Tester"));
+		mvc.perform(post("/api/things/{id}/reroll", id).param("lang", "en").header(HttpHeaders.ACCEPT_LANGUAGE, "de"))
+			.andExpect(jsonPath("$.twist").value(startsWith("It was raining again. ")));
+		mvc.perform(get("/api/meter").header(HttpHeaders.ACCEPT_LANGUAGE, "fr"))
+			.andExpect(jsonPath("$.mood").value("Gähnende Leere"));
+		mvc.perform(get("/api/achievements").param("lang", "en"))
+			.andExpect(jsonPath("$[0].title").value("Boredom Slayer"));
 	}
 
 	@Test
 	void funSubmissionsAreRejectedWithAProblemDetail() throws Exception {
 		mvc.perform(post("/api/things").contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"original": "skydiving into a volcano!!"}"""))
+						{"original": "Fallschirmspringen in einen Vulkan!!"}"""))
 			.andExpect(status().isBadRequest())
 			.andExpect(header().string("Content-Type", "application/problem+json"))
+			.andExpect(jsonPath("$.title").value("Validierung fehlgeschlagen"))
+			.andExpect(jsonPath("$.errors.original").value(startsWith("Das klingt schon nach Spaß")));
+
+		mvc.perform(post("/api/things").contentType(MediaType.APPLICATION_JSON)
+				.header(HttpHeaders.ACCEPT_LANGUAGE, "en")
+				.content("""
+						{"original": "skydiving into a volcano!!"}"""))
 			.andExpect(jsonPath("$.errors.original").value(startsWith("That already sounds fun")));
 	}
 
@@ -105,14 +129,14 @@ class ChaosApiTest {
 	@Test
 	void genresShapeTheTwistAndHypeEvolvesTheThingWithLore() throws Exception {
 		Integer id = submit("""
-				{"original": "renewing my passport", "genre": "NOIR"}""");
+				{"original": "den Reisepass verlängern", "genre": "NOIR"}""");
 
 		for (int i = 0; i < 2; i++) {
 			mvc.perform(post("/api/things/{id}/hype", id));
 		}
 		mvc.perform(post("/api/things/{id}/hype", id))
 			.andExpect(jsonPath("$.genre").value("NOIR"))
-			.andExpect(jsonPath("$.twist").value(startsWith("It was raining again. Renewing my passport ")))
+			.andExpect(jsonPath("$.twist").value(startsWith("Es regnete schon wieder. Den Reisepass verlängern – ")))
 			.andExpect(jsonPath("$.hype").value(9))
 			.andExpect(jsonPath("$.tier").value("CURIOUS"))
 			.andExpect(jsonPath("$.peakTier").value("CURIOUS"))
@@ -159,6 +183,9 @@ class ChaosApiTest {
 	void unknownThingIs404Problem() throws Exception {
 		mvc.perform(post("/api/things/{id}/hype", 999_999))
 			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.title").value("Dieses langweilige Ding ist entkommen"))
+			.andExpect(jsonPath("$.detail").value(startsWith("Das langweilige Ding #999999 ")));
+		mvc.perform(post("/api/things/{id}/hype", 999_999).header(HttpHeaders.ACCEPT_LANGUAGE, "en"))
 			.andExpect(jsonPath("$.title").value("This boring thing escaped"));
 	}
 

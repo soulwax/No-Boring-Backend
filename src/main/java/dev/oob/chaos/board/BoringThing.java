@@ -8,6 +8,7 @@ import java.util.function.Function;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -16,6 +17,7 @@ import jakarta.persistence.Id;
 
 import dev.oob.chaos.player.Player;
 import dev.oob.chaos.twist.Genre;
+import dev.oob.chaos.twist.Twist;
 
 @Entity
 public class BoringThing {
@@ -27,8 +29,8 @@ public class BoringThing {
 	@Column(nullable = false, length = 140)
 	private String original;
 
-	@Column(nullable = false, length = 400)
-	private String twist;
+	@Embedded
+	private Twist twist;
 
 	@Column(nullable = false, length = 40)
 	private String author;
@@ -46,6 +48,7 @@ public class BoringThing {
 	@Column(nullable = false, length = 20)
 	private Tier peakTier = Tier.BORING;
 
+	/** {@link Lore} keys, oldest first */
 	@Convert(converter = LinesConverter.class)
 	@Column(nullable = false, length = 2000)
 	private List<String> lore = List.of();
@@ -60,7 +63,7 @@ public class BoringThing {
 	protected BoringThing() {
 	}
 
-	public BoringThing(String original, String twist, String author, Genre genre, String playerId) {
+	public BoringThing(String original, Twist twist, String author, Genre genre, String playerId) {
 		this.original = original;
 		this.twist = twist;
 		this.author = author;
@@ -77,7 +80,7 @@ public class BoringThing {
 		this.hype += amount;
 	}
 
-	public void retwist(String newTwist) {
+	public void retwist(Twist newTwist) {
 		this.twist = newTwist;
 		this.rerolls++;
 	}
@@ -88,7 +91,7 @@ public class BoringThing {
 	 *
 	 * @return the newly reached peak tier, if this call raised it
 	 */
-	public Optional<Tier> evolve(Function<Tier, String> loreFor) {
+	public Optional<Tier> evolve(Function<Tier, Lore> loreFor) {
 		Tier deserved = Tier.forHype(hype);
 		if (deserved.compareTo(peakTier) <= 0) {
 			return Optional.empty();
@@ -96,7 +99,7 @@ public class BoringThing {
 		List<String> grown = new ArrayList<>(lore);
 		for (Tier tier : Tier.values()) {
 			if (tier.compareTo(peakTier) > 0 && tier.compareTo(deserved) <= 0) {
-				grown.add(loreFor.apply(tier));
+				grown.add(loreFor.apply(tier).key());
 			}
 		}
 		// A fresh list (not in-place mutation) so the converted column is reliably marked dirty
@@ -113,7 +116,7 @@ public class BoringThing {
 		return original;
 	}
 
-	public String getTwist() {
+	public Twist getTwist() {
 		return twist;
 	}
 
@@ -137,8 +140,8 @@ public class BoringThing {
 		return peakTier;
 	}
 
-	public List<String> getLore() {
-		return lore;
+	public List<Lore> getLore() {
+		return lore.stream().map(Lore::parse).toList();
 	}
 
 	public Instant getCreatedAt() {

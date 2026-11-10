@@ -5,15 +5,23 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
+import dev.oob.chaos.i18n.Lang;
+import dev.oob.chaos.i18n.Text;
+
 /**
  * Whoever is clicking. The browser invents a random {@code id} and keeps it; there are no
  * accounts. Untracked players (no id) can still play but earn no achievements.
  */
 public record Player(String id, String name) {
 
-	public static final String DEFAULT_NAME = "Anonymous Legend";
+	private static final Text DEFAULT_NAME = Text.of("Anonyme Legende", "Anonymous Legend");
 
-	public static final Player ANONYMOUS = new Player(null, DEFAULT_NAME);
+	public static final Player ANONYMOUS = new Player(null, defaultName(Lang.DEFAULT));
+
+	/** What nameless players are called, in the language they play in. */
+	public static String defaultName(Lang lang) {
+		return DEFAULT_NAME.in(lang);
+	}
 
 	public boolean isTracked() {
 		return id != null;
