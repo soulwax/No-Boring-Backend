@@ -13,6 +13,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import dev.oob.chaos.board.PlayerAction;
+import dev.oob.chaos.board.Tier;
 import dev.oob.chaos.board.WaveTriggered;
 import dev.oob.chaos.live.ChaosEvent;
 import dev.oob.chaos.player.Player;
@@ -43,11 +44,20 @@ public class AchievementTracker {
 		boolean night = LocalTime.now(clock).getHour() < 5;
 		record(action.player(), p -> {
 			switch (action.kind()) {
-				case SUBMIT -> p.submits++;
+				case SUBMIT -> {
+					p.submits++;
+					p.genres.add(action.thing().genre());
+				}
 				case HYPE -> {
 					p.hypes++;
 					if (action.ownThing()) {
 						p.selfHypes++;
+					}
+					if (action.promotedTo() == Tier.MYTHIC) {
+						p.mythics++;
+					}
+					if (action.mutator() != null) {
+						p.mutatorHypes++;
 					}
 				}
 				case REROLL -> p.rerolls++;

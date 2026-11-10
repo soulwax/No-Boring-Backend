@@ -10,7 +10,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import dev.oob.chaos.live.ChaosEvent;
+import dev.oob.chaos.mutator.Mutator;
+import dev.oob.chaos.mutator.MutatorDirector;
 import dev.oob.chaos.player.Player;
+import dev.oob.chaos.twist.Genre;
 import dev.oob.chaos.twist.TwistEngine;
 
 @Service
@@ -27,17 +30,23 @@ public class ChaosService {
 	/** The meter must calm down below this before another wave can happen. */
 	static final int WAVE_REARM_LEVEL = 50;
 
+	private static final List<Genre> GENRES = List.of(Genre.values());
+
 	private final BoringThingRepository things;
 
 	private final TwistEngine twistEngine;
+
+	private final MutatorDirector mutators;
 
 	private final ApplicationEventPublisher events;
 
 	private final AtomicBoolean waveArmed = new AtomicBoolean(true);
 
-	public ChaosService(BoringThingRepository things, TwistEngine twistEngine, ApplicationEventPublisher events) {
+	public ChaosService(BoringThingRepository things, TwistEngine twistEngine, MutatorDirector mutators,
+			ApplicationEventPublisher events) {
 		this.things = things;
 		this.twistEngine = twistEngine;
+		this.mutators = mutators;
 		this.events = events;
 	}
 
@@ -51,28 +60,38 @@ public class ChaosService {
 		return ChaosMeter.from(things.totalHype(), things.count());
 	}
 
-	public ThingView submit(String original, String author, Player player) {
+	/** @param requested the genre the player picked, or {@code null} for a surprise */
+	public ThingView submit(String original, String author, Genre requested, Player player) {
 		String name = (author == null || author.isBlank()) ? player.name() : author.strip();
+		Genre genre = mutators.lockedGenre()
+			.orElseGet(() -> requested != null ? requested : twistEngine.pickFrom(GENRES));
 		BoringThing thing = things.save(
-				new BoringThing(original.strip(), twistEngine.twist(original), name, player.id()));
-		return changed(thing, player, PlayerAction.Kind.SUBMIT);
+				new BoringThing(original.strip(), twistEngine.twist(original, genre), name, genre, player.id()));
+		return changed(thing, player, PlayerAction.Kind.SUBMIT, null);
 	}
 
 	public ThingView hype(long id, Player player) {
 		BoringThing thing = find(id);
-		thing.addHype(HYPE_PER_CLICK);
-		return changed(thing, player, PlayerAction.Kind.HYPE);
+		thing.addHype(HYPE_PER_CLICK * mutators.hypeMultiplier());
+		if (mutators.isActive(Mutator.TWIST_TORNADO)) {
+			thing.retwist(twistEngine.twist(thing.getOriginal(), genreFor(thing)));
+		}
+		Tier promoted = thing.evolve(tier -> twistEngine.pickFrom(tier.escalations())).orElse(null);
+		return changed(thing, player, PlayerAction.Kind.HYPE, promoted);
 	}
 
 	public ThingView reroll(long id, Player player) {
 		BoringThing thing = find(id);
-		thing.retwist(twistEngine.twist(thing.getOriginal()));
-		return changed(thing, player, PlayerAction.Kind.REROLL);
+		thing.retwist(twistEngine.twist(thing.getOriginal(), genreFor(thing)));
+		return changed(thing, player, PlayerAction.Kind.REROLL, null);
 	}
 
-	/** Hype fades on its own, so the board is never the same twice. */
+	/** Hype fades on its own, so the board is never the same twice. Unless time is frozen. */
 	@Scheduled(fixedRateString = "${chaos.decay-interval}", initialDelayString = "${chaos.decay-interval}")
 	public void decay() {
+		if (mutators.isActive(Mutator.FROZEN_TIME)) {
+			return;
+		}
 		if (things.decayHype(DECAY_PER_TICK) > 0) {
 			ChaosMeter meter = meter();
 			events.publishEvent(ChaosEvent.board(board()));
@@ -83,17 +102,24 @@ public class ChaosService {
 		}
 	}
 
-	private ThingView changed(BoringThing thing, Player player, PlayerAction.Kind kind) {
+	/** Re-rolls stay in the thing's own genre, unless a genre lock says otherwise. */
+	private Genre genreFor(BoringThing thing) {
+		return mutators.lockedGenre().orElse(thing.getGenre());
+	}
+
+	private ThingView changed(BoringThing thing, Player player, PlayerAction.Kind kind, Tier promoted) {
 		things.flush();
 		ThingView view = ThingView.of(thing);
 		ChaosMeter meter = meter();
 		events.publishEvent(ChaosEvent.thing(view));
 		events.publishEvent(ChaosEvent.meter(meter));
-		events.publishEvent(new PlayerAction(player, kind, thing.isOwnedBy(player)));
+		events.publishEvent(new PlayerAction(player, kind, view, thing.isOwnedBy(player), promoted,
+				mutators.activeMutator().orElse(null)));
 
 		if (meter.level() >= WAVE_LEVEL && waveArmed.compareAndSet(true, false)) {
 			events.publishEvent(new WaveTriggered(player));
 			events.publishEvent(new ChaosEvent("wave", Map.of("by", player.name())));
+			mutators.startRandom();
 		}
 		else if (meter.level() < WAVE_REARM_LEVEL) {
 			waveArmed.set(true);

@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,18 +18,31 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import com.jayway.jsonpath.JsonPath;
 
-@SpringBootTest(properties = { "chaos.decay-interval=1h", "chaos.seed-demo-data=false" })
+import dev.oob.chaos.mutator.Mutator;
+import dev.oob.chaos.mutator.MutatorDirector;
+import dev.oob.chaos.twist.Genre;
+
+@SpringBootTest(properties = { "chaos.decay-interval=1h", "chaos.mutator-interval=1h", "chaos.seed-demo-data=false" })
 @AutoConfigureMockMvc
 class ChaosApiTest {
 
 	@Autowired
 	MockMvc mvc;
 
+	@Autowired
+	MutatorDirector mutators;
+
+	/** Waves start mutators; never let one leak into the next test. */
+	@AfterEach
+	void calmDown() {
+		mutators.stop();
+	}
+
 	@Test
 	void submittingABoringThingReturnsItTwisted() throws Exception {
 		mvc.perform(post("/api/things").contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"original": "sorting receipts", "author": "Tester"}"""))
+						{"original": "sorting receipts", "author": "Tester", "genre": "CLASSIC"}"""))
 			.andExpect(status().isCreated())
 			.andExpect(header().string("Location", startsWith("/api/things/")))
 			.andExpect(jsonPath("$.twist").value(startsWith("Sorting receipts ")))
@@ -86,6 +100,59 @@ class ChaosApiTest {
 
 		mvc.perform(get("/api/achievements"))
 			.andExpect(jsonPath("$[?(@.unlocked == true)]").isEmpty());
+	}
+
+	@Test
+	void genresShapeTheTwistAndHypeEvolvesTheThingWithLore() throws Exception {
+		Integer id = submit("""
+				{"original": "renewing my passport", "genre": "NOIR"}""");
+
+		for (int i = 0; i < 2; i++) {
+			mvc.perform(post("/api/things/{id}/hype", id));
+		}
+		mvc.perform(post("/api/things/{id}/hype", id))
+			.andExpect(jsonPath("$.genre").value("NOIR"))
+			.andExpect(jsonPath("$.twist").value(startsWith("It was raining again. Renewing my passport ")))
+			.andExpect(jsonPath("$.hype").value(9))
+			.andExpect(jsonPath("$.tier").value("CURIOUS"))
+			.andExpect(jsonPath("$.peakTier").value("CURIOUS"))
+			.andExpect(jsonPath("$.nextTierAt").value(15))
+			.andExpect(jsonPath("$.lore.length()").value(1));
+	}
+
+	@Test
+	void mutatorsBendTheRules() throws Exception {
+		Integer id = submit("""
+				{"original": "untangling cables"}""");
+
+		mutators.start(Mutator.DOUBLE_HYPE, null);
+		mvc.perform(post("/api/things/{id}/hype", id)).andExpect(jsonPath("$.hype").value(6));
+
+		mutators.start(Mutator.GENRE_LOCK, Genre.HEIST);
+		mvc.perform(post("/api/things").contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"original": "matching socks", "genre": "NOIR"}"""))
+			.andExpect(jsonPath("$.genre").value("HEIST"));
+
+		mutators.start(Mutator.TWIST_TORNADO, null);
+		mvc.perform(post("/api/things/{id}/hype", id))
+			.andExpect(jsonPath("$.hype").value(9))
+			.andExpect(jsonPath("$.rerolls").value(1));
+	}
+
+	@Test
+	void unknownGenreIsABadRequest() throws Exception {
+		mvc.perform(post("/api/things").contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"original": "ironing", "genre": "MUSICAL"}"""))
+			.andExpect(status().isBadRequest());
+	}
+
+	private Integer submit(String json) throws Exception {
+		MvcResult created = mvc.perform(post("/api/things").contentType(MediaType.APPLICATION_JSON).content(json))
+			.andExpect(status().isCreated())
+			.andReturn();
+		return JsonPath.read(created.getResponse().getContentAsString(), "$.id");
 	}
 
 	@Test

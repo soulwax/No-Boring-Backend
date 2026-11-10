@@ -12,9 +12,13 @@ import org.junit.jupiter.api.Test;
 
 import dev.oob.chaos.board.PlayerAction;
 import dev.oob.chaos.board.PlayerAction.Kind;
+import dev.oob.chaos.board.ThingView;
+import dev.oob.chaos.board.Tier;
 import dev.oob.chaos.board.WaveTriggered;
 import dev.oob.chaos.live.ChaosEvent;
+import dev.oob.chaos.mutator.Mutator;
 import dev.oob.chaos.player.Player;
+import dev.oob.chaos.twist.Genre;
 
 class AchievementTrackerTest {
 
@@ -30,8 +34,8 @@ class AchievementTrackerTest {
 	void unlocksEachAchievementExactlyOnceAndBroadcastsIt() {
 		AchievementTracker tracker = new AchievementTracker(published::add, NOON);
 
-		tracker.on(new PlayerAction(ada, Kind.SUBMIT, false));
-		tracker.on(new PlayerAction(ada, Kind.SUBMIT, false));
+		tracker.on(action(ada, Kind.SUBMIT, false));
+		tracker.on(action(ada, Kind.SUBMIT, false));
 
 		assertThat(unlockedCodes()).containsExactly("BOREDOM_SLAYER");
 		assertThat(((AchievementUnlocked) ((ChaosEvent) published.getFirst()).payload()).playerTag())
@@ -43,9 +47,9 @@ class AchievementTrackerTest {
 	void hypingYourOwnThingAndDoingEverythingUnlocksComboAchievements() {
 		AchievementTracker tracker = new AchievementTracker(published::add, NOON);
 
-		tracker.on(new PlayerAction(ada, Kind.SUBMIT, false));
-		tracker.on(new PlayerAction(ada, Kind.HYPE, true));
-		tracker.on(new PlayerAction(ada, Kind.REROLL, false));
+		tracker.on(action(ada, Kind.SUBMIT, false));
+		tracker.on(action(ada, Kind.HYPE, true));
+		tracker.on(action(ada, Kind.REROLL, false));
 		tracker.on(new WaveTriggered(ada));
 
 		assertThat(unlockedCodes()).containsExactly("BOREDOM_SLAYER", "SHAMELESS", "RENAISSANCE", "WAVE_RIDER");
@@ -53,10 +57,22 @@ class AchievementTrackerTest {
 	}
 
 	@Test
+	void evolutionGenresAndMutatorsHaveTheirOwnTrophies() {
+		AchievementTracker tracker = new AchievementTracker(published::add, NOON);
+
+		for (Genre genre : List.of(Genre.NOIR, Genre.HEIST, Genre.NOIR, Genre.MEDIEVAL, Genre.SPACE_OPERA)) {
+			tracker.on(new PlayerAction(ada, Kind.SUBMIT, thing(genre), false, null, null));
+		}
+		tracker.on(new PlayerAction(ada, Kind.HYPE, thing(Genre.NOIR), false, Tier.MYTHIC, Mutator.DOUBLE_HYPE));
+
+		assertThat(unlockedCodes()).contains("GENRE_HOPPER", "MYTHMAKER", "STORM_CHASER");
+	}
+
+	@Test
 	void nightOwlsAreRecognized() {
 		AchievementTracker tracker = new AchievementTracker(published::add, THREE_AM);
 
-		tracker.on(new PlayerAction(ada, Kind.HYPE, false));
+		tracker.on(action(ada, Kind.HYPE, false));
 
 		assertThat(unlockedCodes()).containsExactly("INSOMNIAC");
 	}
@@ -65,10 +81,18 @@ class AchievementTrackerTest {
 	void untrackedPlayersEarnNothing() {
 		AchievementTracker tracker = new AchievementTracker(published::add, THREE_AM);
 
-		tracker.on(new PlayerAction(Player.ANONYMOUS, Kind.SUBMIT, false));
+		tracker.on(action(Player.ANONYMOUS, Kind.SUBMIT, false));
 
 		assertThat(published).isEmpty();
 		assertThat(tracker.forPlayer(Player.ANONYMOUS)).noneMatch(AchievementView::unlocked);
+	}
+
+	private static PlayerAction action(Player player, Kind kind, boolean ownThing) {
+		return new PlayerAction(player, kind, thing(Genre.CLASSIC), ownThing, null, null);
+	}
+
+	private static ThingView thing(Genre genre) {
+		return new ThingView(1L, "x", "X", "Ada", genre, 0, 0, Tier.BORING, Tier.BORING, 6, List.of(), Instant.EPOCH);
 	}
 
 	private List<String> unlockedCodes() {

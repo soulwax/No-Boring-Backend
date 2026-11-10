@@ -22,6 +22,8 @@ import dev.oob.chaos.board.ChaosService;
 import dev.oob.chaos.board.ThingView;
 import dev.oob.chaos.live.ChaosBroadcaster;
 import dev.oob.chaos.live.ChaosEvent;
+import dev.oob.chaos.live.Chronicle;
+import dev.oob.chaos.mutator.MutatorDirector;
 import dev.oob.chaos.player.Player;
 
 @RestController
@@ -34,10 +36,17 @@ class ChaosController {
 
 	private final AchievementTracker achievements;
 
-	ChaosController(ChaosService chaos, ChaosBroadcaster broadcaster, AchievementTracker achievements) {
+	private final MutatorDirector mutators;
+
+	private final Chronicle chronicle;
+
+	ChaosController(ChaosService chaos, ChaosBroadcaster broadcaster, AchievementTracker achievements,
+			MutatorDirector mutators, Chronicle chronicle) {
 		this.chaos = chaos;
 		this.broadcaster = broadcaster;
 		this.achievements = achievements;
+		this.mutators = mutators;
+		this.chronicle = chronicle;
 	}
 
 	@GetMapping("/things")
@@ -47,7 +56,7 @@ class ChaosController {
 
 	@PostMapping("/things")
 	ResponseEntity<ThingView> submit(@Valid @RequestBody SubmitRequest request, Player player) {
-		ThingView created = chaos.submit(request.original(), request.author(), player);
+		ThingView created = chaos.submit(request.original(), request.author(), request.genre(), player);
 		return ResponseEntity.created(URI.create("/api/things/" + created.id())).body(created);
 	}
 
@@ -73,7 +82,11 @@ class ChaosController {
 
 	@GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	SseEmitter stream() {
-		return broadcaster.subscribe(List.of(ChaosEvent.board(chaos.board()), ChaosEvent.meter(chaos.meter())));
+		return broadcaster.subscribe(List.of(
+				ChaosEvent.board(chaos.board()),
+				ChaosEvent.meter(chaos.meter()),
+				new ChaosEvent("mutator", mutators.state()),
+				new ChaosEvent("chronicle", chronicle.recent())));
 	}
 
 }

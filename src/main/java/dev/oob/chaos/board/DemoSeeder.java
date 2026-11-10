@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import dev.oob.chaos.player.Player;
+import dev.oob.chaos.twist.Genre;
 
 /** Makes sure nobody ever opens the app to an empty (boring) board. */
 @Component
@@ -26,11 +27,11 @@ class DemoSeeder implements ApplicationRunner {
 		if (things.count() > 0) {
 			return;
 		}
-		chaos.submit("filing my taxes", "Accountant Ada", Player.ANONYMOUS);
-		chaos.submit("waiting for the bus", "Commuter Kai", Player.ANONYMOUS);
-		chaos.submit("folding laundry", "Sock Wizard", Player.ANONYMOUS);
-		chaos.submit("a two-hour status meeting", "Product Pat", Player.ANONYMOUS);
-		chaos.submit("defrosting the freezer", null, Player.ANONYMOUS);
+		chaos.submit("filing my taxes", "Accountant Ada", Genre.NOIR, Player.ANONYMOUS);
+		chaos.submit("waiting for the bus", "Commuter Kai", Genre.NATURE_DOC, Player.ANONYMOUS);
+		chaos.submit("folding laundry", "Sock Wizard", Genre.MEDIEVAL, Player.ANONYMOUS);
+		chaos.submit("a two-hour status meeting", "Product Pat", Genre.HEIST, Player.ANONYMOUS);
+		chaos.submit("defrosting the freezer", null, Genre.SPACE_OPERA, Player.ANONYMOUS);
 	}
 
 }

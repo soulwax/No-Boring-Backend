@@ -12,6 +12,9 @@ public enum Achievement {
 	RENAISSANCE("🎭", "Renaissance Agent of Chaos", "Submit, hype and re-roll at least once",
 			p -> p.submits >= 1 && p.hypes >= 1 && p.rerolls >= 1),
 	WAVE_RIDER("🌊", "Wave Rider", "Be the one who pushes the Chaos Meter over the edge", p -> p.triggeredWave),
+	MYTHMAKER("🐉", "Mythmaker", "Land the hype that makes something Mythic", p -> p.mythics >= 1),
+	GENRE_HOPPER("🎬", "Genre Hopper", "Submit things in 4 different genres", p -> p.genres.size() >= 4),
+	STORM_CHASER("🌀", "Storm Chaser", "Hype something while a mutator is active", p -> p.mutatorHypes >= 1),
 	INSOMNIAC("🦉", "Insomniac", "Fight boredom between midnight and 5 a.m.", p -> p.nightOwl);
 
 	private final String emoji;

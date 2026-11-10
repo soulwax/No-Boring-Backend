@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import dev.oob.chaos.twist.Genre;
+
 /** One player's counters. All access goes through the synchronized methods. */
 final class PlayerProgress {
 
@@ -16,6 +18,12 @@ final class PlayerProgress {
 	int rerolls;
 
 	int selfHypes;
+
+	int mythics;
+
+	int mutatorHypes;
+
+	final Set<Genre> genres = EnumSet.noneOf(Genre.class);
 
 	boolean triggeredWave;
 
