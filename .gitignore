@@ -31,3 +31,23 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### AI assistant files stay out of this repo ###
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+AGENTS.md
+GEMINI.md
+.gemini/
+.cursor/
+.cursorrules
+.windsurf/
+.windsurfrules
+.aider*
+.continue/
+.github/copilot-instructions.md
+.github/instructions/
+.mcp.json
+mcp.json
+llms.txt
+llms-full.txt
