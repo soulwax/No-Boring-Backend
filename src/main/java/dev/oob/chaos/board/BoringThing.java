@@ -7,6 +7,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 
+import dev.oob.chaos.player.Player;
+
 @Entity
 public class BoringThing {
 
@@ -30,14 +32,23 @@ public class BoringThing {
 	@Column(nullable = false)
 	private Instant createdAt;
 
+	/** Submitting player's private id; never leaves the server. */
+	@Column(length = 64)
+	private String playerId;
+
 	protected BoringThing() {
 	}
 
-	public BoringThing(String original, String twist, String author) {
+	public BoringThing(String original, String twist, String author, String playerId) {
 		this.original = original;
 		this.twist = twist;
 		this.author = author;
+		this.playerId = playerId;
 		this.createdAt = Instant.now();
+	}
+
+	public boolean isOwnedBy(Player player) {
+		return player.isTracked() && player.id().equals(playerId);
 	}
 
 	public void addHype(int amount) {

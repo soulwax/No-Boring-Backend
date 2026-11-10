@@ -61,6 +61,34 @@ class ChaosApiTest {
 	}
 
 	@Test
+	void playerHeadersEarnAchievementsIncludingTheChaosWave() throws Exception {
+		String player = "test-player-0001";
+		MvcResult created = mvc.perform(post("/api/things").contentType(MediaType.APPLICATION_JSON)
+				.header(PlayerArgumentResolver.ID_HEADER, player)
+				.header(PlayerArgumentResolver.NAME_HEADER, "Z%C3%B6e")
+				.content("""
+						{"original": "waiting on hold"}"""))
+			.andExpect(jsonPath("$.author").value("Zöe"))
+			.andReturn();
+		Integer id = JsonPath.read(created.getResponse().getContentAsString(), "$.id");
+
+		// Enough hype to cross the wave threshold on its own
+		for (int i = 0; i < 40; i++) {
+			mvc.perform(post("/api/things/{id}/hype", id).header(PlayerArgumentResolver.ID_HEADER, player));
+		}
+
+		mvc.perform(get("/api/achievements").header(PlayerArgumentResolver.ID_HEADER, player))
+			.andExpect(jsonPath("$[?(@.code == 'BOREDOM_SLAYER')].unlocked").value(true))
+			.andExpect(jsonPath("$[?(@.code == 'SHAMELESS')].unlocked").value(true))
+			.andExpect(jsonPath("$[?(@.code == 'HYPE_MACHINE')].unlocked").value(true))
+			.andExpect(jsonPath("$[?(@.code == 'WAVE_RIDER')].unlocked").value(true))
+			.andExpect(jsonPath("$[?(@.code == 'PLOT_TWIST_ADDICT')].unlocked").value(false));
+
+		mvc.perform(get("/api/achievements"))
+			.andExpect(jsonPath("$[?(@.unlocked == true)]").isEmpty());
+	}
+
+	@Test
 	void unknownThingIs404Problem() throws Exception {
 		mvc.perform(post("/api/things/{id}/hype", 999_999))
 			.andExpect(status().isNotFound())
