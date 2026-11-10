@@ -5,3 +5,8 @@ mvnw.cmd
 *.iml
 .idea
 .vscode
+.git
+.github
+Dockerfile*
+.dockerignore
+HELP.md
