@@ -1,5 +1,6 @@
 package dev.oob.chaos.player;
 
+import org.jspecify.annotations.Nullable;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -12,7 +13,7 @@ import dev.oob.chaos.i18n.Text;
  * Whoever is clicking. The browser invents a random {@code id} and keeps it; there are no
  * accounts. Untracked players (no id) can still play but earn no achievements.
  */
-public record Player(String id, String name) {
+public record Player(@Nullable String id, String name) {
 
 	private static final Text DEFAULT_NAME = Text.of("Anonyme Legende", "Anonymous Legend");
 
@@ -32,7 +33,7 @@ public record Player(String id, String name) {
 	 * clients can't impersonate anyone; the owner's browser computes the same hash to
 	 * recognize its own events.
 	 */
-	public String tag() {
+	public @Nullable String tag() {
 		if (id == null) {
 			return null;
 		}

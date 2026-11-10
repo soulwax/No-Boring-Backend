@@ -2,51 +2,29 @@ package dev.oob.chaos.mutator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 import dev.oob.chaos.i18n.Lang;
-import dev.oob.chaos.live.ChaosEvent;
+import dev.oob.chaos.room.RoomState;
+import dev.oob.chaos.support.TestClock;
+import dev.oob.chaos.support.TestDatabase;
 import dev.oob.chaos.twist.Genre;
 import dev.oob.chaos.twist.TwistEngine;
 
 class MutatorDirectorTest {
 
-	/** A clock the test can move forward. */
-	static final class TestClock extends Clock {
-
-		Instant now = Instant.parse("2026-11-10T12:00:00Z");
-
-		@Override
-		public ZoneId getZone() {
-			return ZoneOffset.UTC;
-		}
-
-		@Override
-		public Clock withZone(ZoneId zone) {
-			return this;
-		}
-
-		@Override
-		public Instant instant() {
-			return now;
-		}
-
-	}
-
 	private final List<Object> published = new ArrayList<>();
 
 	private final TestClock clock = new TestClock();
 
-	private final MutatorDirector director = new MutatorDirector(published::add, clock, new TwistEngine(),
-			Duration.ofSeconds(45));
+	private final RoomState room = new RoomState(JdbcClient.create(TestDatabase.migrated()));
+
+	private final MutatorDirector director = director();
 
 	@Test
 	void doubleHypeDoublesUntilItExpires() {
@@ -60,7 +38,7 @@ class MutatorDirectorTest {
 		director.expire();
 
 		assertThat(director.hypeMultiplier()).isEqualTo(1);
-		assertThat(mutatorStates()).extracting(MutatorState::active).containsExactly(true, false);
+		assertThat(changes()).extracting(MutatorState::active).containsExactly(true, false);
 	}
 
 	@Test
@@ -78,13 +56,34 @@ class MutatorDirectorTest {
 		director.scheduledStart();
 
 		assertThat(director.isActive(Mutator.FROZEN_TIME)).isTrue();
-		assertThat(mutatorStates()).hasSize(1);
+		assertThat(changes()).hasSize(1);
 	}
 
-	private List<MutatorState> mutatorStates() {
+	@Test
+	void instancesShareOneMutatorAndOnlyOneAnnouncesItsEnd() {
+		MutatorDirector other = director();
+		director.start(Mutator.TWIST_TORNADO, null);
+
+		assertThat(other.isActive(Mutator.TWIST_TORNADO)).as("seen by the other instance").isTrue();
+
+		clock.now = clock.now.plusSeconds(46);
+		other.expire();
+		director.expire();
+		other.scheduledStart();
+		director.scheduledStart();
+
+		// One start, one expiry, then exactly one of the two schedulers wins the calm room
+		assertThat(changes()).extracting(MutatorState::active).containsExactly(true, false, true);
+	}
+
+	private MutatorDirector director() {
+		return new MutatorDirector(published::add, clock, new TwistEngine(), Duration.ofSeconds(45), room);
+	}
+
+	private List<MutatorState> changes() {
 		return published.stream()
-			.filter(ChaosEvent.class::isInstance)
-			.map(e -> (MutatorState) ((ChaosEvent) e).payloadIn(Lang.EN))
+			.filter(MutatorChanged.class::isInstance)
+			.map(e -> ((MutatorChanged) e).state().in(Lang.EN))
 			.toList();
 	}
 

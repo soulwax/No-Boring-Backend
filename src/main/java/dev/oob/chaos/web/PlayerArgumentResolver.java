@@ -10,11 +10,13 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
+import dev.oob.chaos.auth.GitHubAccount;
 import dev.oob.chaos.player.Player;
 
 /**
- * Lets any controller method simply declare a {@link Player} parameter. Built from the
- * {@code X-Chaos-Player} / {@code X-Chaos-Name} headers the Angular interceptor adds.
+ * Lets any controller method simply declare a {@link Player} parameter. A GitHub sign-in wins;
+ * otherwise the guest is built from the {@code X-Chaos-Player} / {@code X-Chaos-Name} headers
+ * the Angular interceptor adds.
  */
 class PlayerArgumentResolver implements HandlerMethodArgumentResolver {
 
@@ -34,6 +36,10 @@ class PlayerArgumentResolver implements HandlerMethodArgumentResolver {
 	@Override
 	public Player resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
 			NativeWebRequest request, WebDataBinderFactory binderFactory) {
+		var account = GitHubAccount.current();
+		if (account.isPresent()) {
+			return new Player(account.get().playerId(), account.get().displayName());
+		}
 		String id = request.getHeader(ID_HEADER);
 		String name = name(request.getHeader(NAME_HEADER), Player.defaultName(LangArgumentResolver.resolve(request)));
 		if (id == null || !VALID_ID.matcher(id).matches()) {

@@ -1,5 +1,6 @@
 package dev.oob.chaos.board;
 
+import org.jspecify.annotations.Nullable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +14,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 
 import dev.oob.chaos.player.Player;
@@ -23,7 +25,7 @@ import dev.oob.chaos.twist.Twist;
 public class BoringThing {
 
 	@Id
-	@GeneratedValue
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
 	@Column(nullable = false, length = 140)
@@ -58,12 +60,12 @@ public class BoringThing {
 
 	/** Submitting player's private id; never leaves the server. */
 	@Column(length = 64)
-	private String playerId;
+	private @Nullable String playerId;
 
 	protected BoringThing() {
 	}
 
-	public BoringThing(String original, Twist twist, String author, Genre genre, String playerId) {
+	public BoringThing(String original, Twist twist, String author, Genre genre, @Nullable String playerId) {
 		this.original = original;
 		this.twist = twist;
 		this.author = author;

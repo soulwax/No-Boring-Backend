@@ -29,7 +29,7 @@ public enum Achievement {
 			p -> p.mythics >= 1),
 	GENRE_HOPPER("🎬", of("Genre-Hopper", "Genre Hopper"),
 			of("Reiche Dinge in 4 verschiedenen Genres ein", "Submit things in 4 different genres"),
-			p -> p.genres.size() >= 4),
+			p -> p.genreCount() >= 4),
 	STORM_CHASER("🌀", of("Sturmjäger", "Storm Chaser"),
 			of("Hype etwas, während ein Mutator aktiv ist", "Hype something while a mutator is active"),
 			p -> p.mutatorHypes >= 1),

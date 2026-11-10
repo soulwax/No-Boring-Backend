@@ -2,10 +2,10 @@ package dev.oob.chaos.live;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.List;
 import java.util.function.Function;
+
+import tools.jackson.databind.JsonNode;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
@@ -21,21 +21,14 @@ import dev.oob.chaos.mutator.MutatorState;
 
 /**
  * The room's story so far: turns domain events into short human-readable lines (in every
- * language), broadcasts each one, and remembers the latest few for anyone who joins late.
+ * language) and broadcasts each one. The latest few for anyone who joins late come straight
+ * from the {@link ChaosLog}, so every instance tells the same story.
  * Plain hypes are deliberately left out (far too chatty); evolutions are not.
  */
 @Component
 public class Chronicle {
 
 	public record Entry(String emoji, String text, Instant at) {
-	}
-
-	private record Line(String emoji, Localized<String> text, Instant at) {
-
-		Entry in(Lang lang) {
-			return new Entry(emoji, text.in(lang), at);
-		}
-
 	}
 
 	static final int KEEP = 20;
@@ -58,21 +51,22 @@ public class Chronicle {
 
 	private static final Text QUOTE = Text.of("„%s“", "“%s”");
 
-	private final Deque<Line> recent = new ArrayDeque<>();
-
 	private final ApplicationEventPublisher events;
+
+	private final ChaosLog log;
 
 	private final Clock clock;
 
-	public Chronicle(ApplicationEventPublisher events, Clock clock) {
+	public Chronicle(ApplicationEventPublisher events, ChaosLog log, Clock clock) {
 		this.events = events;
+		this.log = log;
 		this.clock = clock;
 	}
 
 	/** Newest first. */
-	public synchronized Localized<List<Entry>> recent() {
-		List<Line> lines = List.copyOf(recent);
-		return Localized.of(lang -> lines.stream().map(line -> line.in(lang)).toList());
+	public Localized<List<JsonNode>> recent() {
+		List<ChaosLog.Entry> latest = log.latest(ChaosEvent.ACTIVITY, KEEP);
+		return lang -> latest.stream().map(entry -> entry.in(lang)).toList();
 	}
 
 	@EventListener
@@ -109,14 +103,9 @@ public class Chronicle {
 	}
 
 	private void write(String emoji, Function<Lang, String> text) {
-		Line line = new Line(emoji, Localized.of(text), clock.instant());
-		synchronized (this) {
-			recent.addFirst(line);
-			while (recent.size() > KEEP) {
-				recent.removeLast();
-			}
-		}
-		events.publishEvent(new ChaosEvent("activity", (Localized<Entry>) line::in));
+		Instant at = clock.instant();
+		events.publishEvent(new ChaosEvent(ChaosEvent.ACTIVITY,
+				Localized.of(lang -> new Entry(emoji, text.apply(lang), at))));
 	}
 
 	private static String quote(String text, Lang lang) {

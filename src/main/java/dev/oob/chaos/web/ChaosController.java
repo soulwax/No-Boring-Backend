@@ -5,26 +5,26 @@ import java.util.List;
 
 import jakarta.validation.Valid;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import dev.oob.chaos.achievements.AchievementTracker;
 import dev.oob.chaos.achievements.AchievementView;
+import dev.oob.chaos.achievements.TrophyShelf;
 import dev.oob.chaos.board.ChaosMeter;
 import dev.oob.chaos.board.ChaosService;
 import dev.oob.chaos.board.ThingView;
 import dev.oob.chaos.i18n.Lang;
 import dev.oob.chaos.live.ChaosBroadcaster;
-import dev.oob.chaos.live.ChaosEvent;
-import dev.oob.chaos.live.Chronicle;
-import dev.oob.chaos.mutator.MutatorDirector;
 import dev.oob.chaos.player.Player;
 
 @RestController
@@ -37,17 +37,10 @@ class ChaosController {
 
 	private final AchievementTracker achievements;
 
-	private final MutatorDirector mutators;
-
-	private final Chronicle chronicle;
-
-	ChaosController(ChaosService chaos, ChaosBroadcaster broadcaster, AchievementTracker achievements,
-			MutatorDirector mutators, Chronicle chronicle) {
+	ChaosController(ChaosService chaos, ChaosBroadcaster broadcaster, AchievementTracker achievements) {
 		this.chaos = chaos;
 		this.broadcaster = broadcaster;
 		this.achievements = achievements;
-		this.mutators = mutators;
-		this.chronicle = chronicle;
 	}
 
 	@GetMapping("/things")
@@ -76,19 +69,24 @@ class ChaosController {
 		return chaos.meter().in(lang);
 	}
 
-	@GetMapping("/achievements")
+	@GetMapping(path = "/achievements", version = "1")
 	List<AchievementView> achievements(Player player, Lang lang) {
 		return achievements.forPlayer(player, lang);
 	}
 
-	/** Open with {@code ?lang=en} for English; everything on this stream then arrives in that language. */
+	/** {@code API-Version: 2}: an envelope with counts, and when each trophy was earned */
+	@GetMapping(path = "/achievements", version = "2")
+	TrophyShelf trophyShelf(Player player, Lang lang) {
+		return achievements.shelf(player, lang);
+	}
+
+	/**
+	 * Open with {@code ?lang=en} for English; everything on this stream then arrives in that
+	 * language. Browsers reconnecting on their own send {@code Last-Event-ID} and catch up.
+	 */
 	@GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-	SseEmitter stream(Lang lang) {
-		return broadcaster.subscribe(lang, List.of(
-				ChaosEvent.board(chaos.board()),
-				ChaosEvent.meter(chaos.meter()),
-				new ChaosEvent("mutator", mutators.state()),
-				new ChaosEvent("chronicle", chronicle.recent())));
+	SseEmitter stream(Lang lang, @RequestHeader(name = "Last-Event-ID", required = false) @Nullable Long lastEventId) {
+		return broadcaster.subscribe(lang, lastEventId);
 	}
 
 }

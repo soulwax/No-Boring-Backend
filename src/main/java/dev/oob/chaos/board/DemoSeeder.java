@@ -4,9 +4,11 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import dev.oob.chaos.i18n.Lang;
 import dev.oob.chaos.player.Player;
+import dev.oob.chaos.room.RoomState;
 import dev.oob.chaos.twist.Genre;
 
 /** Makes sure nobody ever opens the app to an empty (boring) board. Seeded in the default language. */
@@ -18,13 +20,19 @@ class DemoSeeder implements ApplicationRunner {
 
 	private final ChaosService chaos;
 
-	DemoSeeder(BoringThingRepository things, ChaosService chaos) {
+	private final RoomState room;
+
+	DemoSeeder(BoringThingRepository things, ChaosService chaos, RoomState room) {
 		this.things = things;
 		this.chaos = chaos;
+		this.room = room;
 	}
 
+	/** Two instances booting against an empty database at once must not both seed it */
 	@Override
+	@Transactional
 	public void run(ApplicationArguments args) {
+		room.lock();
 		if (things.count() > 0) {
 			return;
 		}

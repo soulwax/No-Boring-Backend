@@ -13,6 +13,11 @@ public interface BoringThingRepository extends JpaRepository<BoringThing, Long> 
 	@Query("select coalesce(sum(t.hype), 0) from BoringThing t")
 	long totalHype();
 
+	/** A guest signs in: what they submitted is theirs now, so hyping it still counts as Shameless */
+	@Modifying
+	@Query("update BoringThing t set t.playerId = :to where t.playerId = :from")
+	int reassign(String from, String to);
+
 	/** Entropy: every hype counter drifts back toward zero. */
 	@Modifying(clearAutomatically = true)
 	@Query("""

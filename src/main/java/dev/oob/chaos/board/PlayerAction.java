@@ -1,5 +1,6 @@
 package dev.oob.chaos.board;
 
+import org.jspecify.annotations.Nullable;
 import dev.oob.chaos.mutator.Mutator;
 import dev.oob.chaos.player.Player;
 
@@ -11,8 +12,8 @@ import dev.oob.chaos.player.Player;
  * @param promotedTo the new peak tier if this action made the thing evolve, else {@code null}
  * @param mutator the mutator in effect at the time, else {@code null}
  */
-public record PlayerAction(Player player, Kind kind, ThingView thing, boolean ownThing, Tier promotedTo,
-		Mutator mutator) {
+public record PlayerAction(Player player, Kind kind, ThingView thing, boolean ownThing, @Nullable Tier promotedTo,
+		@Nullable Mutator mutator) {
 
 	public enum Kind {
 		SUBMIT, HYPE, REROLL

@@ -1,0 +1,1 @@
+org.springframework.boot.EnvironmentPostProcessor=dev.oob.chaos.db.DatabaseUrlEnvironmentPostProcessor,dev.oob.chaos.auth.GitHubLoginEnvironmentPostProcessor

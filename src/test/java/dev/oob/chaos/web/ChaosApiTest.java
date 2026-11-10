@@ -1,5 +1,6 @@
 package dev.oob.chaos.web;
 
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -124,6 +125,31 @@ class ChaosApiTest {
 
 		mvc.perform(get("/api/achievements"))
 			.andExpect(jsonPath("$[?(@.unlocked == true)]").isEmpty());
+	}
+
+	@Test
+	void achievementsComeInTwoApiVersions() throws Exception {
+		String player = "test-player-0002";
+		mvc.perform(post("/api/things").contentType(MediaType.APPLICATION_JSON)
+				.header(PlayerArgumentResolver.ID_HEADER, player)
+				.content("""
+						{"original": "Socken sortieren"}"""))
+			.andExpect(status().isCreated());
+
+		// No header: version 1, the plain list it has always been
+		mvc.perform(get("/api/achievements").header(PlayerArgumentResolver.ID_HEADER, player))
+			.andExpect(jsonPath("$[0].code").value("BOREDOM_SLAYER"))
+			.andExpect(jsonPath("$[0].unlocked").value(true));
+
+		mvc.perform(get("/api/achievements").header(PlayerArgumentResolver.ID_HEADER, player)
+				.header("API-Version", "2"))
+			// At least one: run this after midnight and Insomniac joins in
+			.andExpect(jsonPath("$.unlocked").value(greaterThanOrEqualTo(1)))
+			.andExpect(jsonPath("$.total").value(11))
+			.andExpect(jsonPath("$.trophies[?(@.code == 'BOREDOM_SLAYER')].unlockedAt").isNotEmpty())
+			.andExpect(jsonPath("$.trophies[?(@.code == 'HYPE_MACHINE' && @.unlockedAt == null)]").isNotEmpty());
+
+		mvc.perform(get("/api/achievements").header("API-Version", "7")).andExpect(status().isBadRequest());
 	}
 
 	@Test

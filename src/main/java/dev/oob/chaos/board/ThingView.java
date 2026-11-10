@@ -1,5 +1,6 @@
 package dev.oob.chaos.board;
 
+import org.jspecify.annotations.Nullable;
 import java.time.Instant;
 import java.util.List;
 
@@ -15,7 +16,7 @@ import dev.oob.chaos.twist.Genre;
  * @param nextTierAt hype needed for the next tier, or {@code null} at the top
  */
 public record ThingView(Long id, String original, String twist, String author, Genre genre, int hype,
-		int rerolls, Tier tier, Tier peakTier, Integer nextTierAt, List<String> lore, Instant createdAt) {
+		int rerolls, Tier tier, Tier peakTier, @Nullable Integer nextTierAt, List<String> lore, Instant createdAt) {
 
 	static ThingView of(BoringThing thing, Lang lang) {
 		Tier tier = Tier.forHype(thing.getHype());

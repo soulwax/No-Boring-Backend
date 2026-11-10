@@ -1,10 +1,16 @@
 package dev.oob.chaos.board;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.resilience.annotation.ConcurrencyLimit;
+import org.springframework.resilience.annotation.Retryable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,9 +21,17 @@ import dev.oob.chaos.live.ChaosEvent;
 import dev.oob.chaos.mutator.Mutator;
 import dev.oob.chaos.mutator.MutatorDirector;
 import dev.oob.chaos.player.Player;
+import dev.oob.chaos.room.RoomState;
 import dev.oob.chaos.twist.Genre;
 import dev.oob.chaos.twist.TwistEngine;
 
+/**
+ * The board's rules. Mutations run under two Spring Framework 7 resilience annotations, both
+ * wrapped around the transaction: {@code @ConcurrencyLimit}, because on virtual threads nothing
+ * else stops a burst of hypes from queueing on the connection pool, and {@code @Retryable},
+ * because a transient failure rolls back the change together with its outbox events, so a
+ * clean retry is always safe.
+ */
 @Service
 @Transactional
 public class ChaosService {
@@ -42,14 +56,22 @@ public class ChaosService {
 
 	private final ApplicationEventPublisher events;
 
-	private final AtomicBoolean waveArmed = new AtomicBoolean(true);
+	private final RoomState room;
+
+	private final Clock clock;
+
+	private final Duration decayInterval;
 
 	public ChaosService(BoringThingRepository things, TwistEngine twistEngine, MutatorDirector mutators,
-			ApplicationEventPublisher events) {
+			ApplicationEventPublisher events, RoomState room, Clock clock,
+			@Value("${chaos.decay-interval}") Duration decayInterval) {
 		this.things = things;
 		this.twistEngine = twistEngine;
 		this.mutators = mutators;
 		this.events = events;
+		this.room = room;
+		this.clock = clock;
+		this.decayInterval = decayInterval;
 	}
 
 	@Transactional(readOnly = true)
@@ -66,7 +88,10 @@ public class ChaosService {
 	}
 
 	/** @param requested the genre the player picked, or {@code null} for a surprise */
-	public ThingView submit(String original, String author, Genre requested, Player player, Lang lang) {
+	@ConcurrencyLimit(limitString = "${chaos.mutation-concurrency}")
+	@Retryable(includes = TransientDataAccessException.class, maxRetries = 2, delay = 50, jitter = 25)
+	public ThingView submit(String original, @Nullable String author, @Nullable Genre requested, Player player,
+			Lang lang) {
 		String name = (author == null || author.isBlank()) ? player.name() : author.strip();
 		Genre genre = mutators.lockedGenre()
 			.orElseGet(() -> requested != null ? requested : twistEngine.pickFrom(GENRES));
@@ -75,6 +100,8 @@ public class ChaosService {
 		return changed(thing, player, lang, PlayerAction.Kind.SUBMIT, null);
 	}
 
+	@ConcurrencyLimit(limitString = "${chaos.mutation-concurrency}")
+	@Retryable(includes = TransientDataAccessException.class, maxRetries = 2, delay = 50, jitter = 25)
 	public ThingView hype(long id, Player player, Lang lang) {
 		BoringThing thing = find(id);
 		thing.addHype(HYPE_PER_CLICK * mutators.hypeMultiplier());
@@ -85,24 +112,28 @@ public class ChaosService {
 		return changed(thing, player, lang, PlayerAction.Kind.HYPE, promoted);
 	}
 
+	@ConcurrencyLimit(limitString = "${chaos.mutation-concurrency}")
+	@Retryable(includes = TransientDataAccessException.class, maxRetries = 2, delay = 50, jitter = 25)
 	public ThingView reroll(long id, Player player, Lang lang) {
 		BoringThing thing = find(id);
 		thing.retwist(twistEngine.roll(genreFor(thing)));
 		return changed(thing, player, lang, PlayerAction.Kind.REROLL, null);
 	}
 
-	/** Hype fades on its own, so the board is never the same twice. Unless time is frozen. */
+	/**
+	 * Hype fades on its own, so the board is never the same twice. Unless time is frozen. Every
+	 * instance schedules it; {@link RoomState#claimDecay} lets exactly one of them run each tick.
+	 */
 	@Scheduled(fixedRateString = "${chaos.decay-interval}", initialDelayString = "${chaos.decay-interval}")
 	public void decay() {
-		if (mutators.isActive(Mutator.FROZEN_TIME)) {
+		if (mutators.isActive(Mutator.FROZEN_TIME) || !room.claimDecay(clock.instant(), decayInterval)) {
 			return;
 		}
 		if (things.decayHype(DECAY_PER_TICK) > 0) {
-			Localized<ChaosMeter> meter = meter();
-			events.publishEvent(ChaosEvent.board(board()));
-			events.publishEvent(ChaosEvent.meter(meter));
-			if (meter.in(Lang.DEFAULT).level() < WAVE_REARM_LEVEL) {
-				waveArmed.set(true);
+			events.publishEvent(ChaosEvent.changed(ChaosEvent.BOARD));
+			events.publishEvent(ChaosEvent.changed(ChaosEvent.METER));
+			if (meter().in(Lang.DEFAULT).level() < WAVE_REARM_LEVEL) {
+				room.rearmWave();
 			}
 		}
 	}
@@ -117,23 +148,24 @@ public class ChaosService {
 	}
 
 	/** @param lang the language the acting player reads, for the view they get back */
-	private ThingView changed(BoringThing thing, Player player, Lang lang, PlayerAction.Kind kind, Tier promoted) {
+	private ThingView changed(BoringThing thing, Player player, Lang lang, PlayerAction.Kind kind,
+			@Nullable Tier promoted) {
 		things.flush();
 		Localized<ThingView> view = Localized.of(l -> ThingView.of(thing, l));
-		Localized<ChaosMeter> meter = meter();
-		int level = meter.in(Lang.DEFAULT).level();
+		int level = meter().in(Lang.DEFAULT).level();
 		events.publishEvent(ChaosEvent.thing(view));
-		events.publishEvent(ChaosEvent.meter(meter));
+		events.publishEvent(ChaosEvent.changed(ChaosEvent.METER));
 		events.publishEvent(new PlayerAction(player, kind, view.in(lang), thing.isOwnedBy(player), promoted,
 				mutators.activeMutator().orElse(null)));
 
-		if (level >= WAVE_LEVEL && waveArmed.compareAndSet(true, false)) {
+		// Whichever instance flips the shared flag first unleashes the wave; everyone else just hyped
+		if (level >= WAVE_LEVEL && room.disarmWave()) {
 			events.publishEvent(new WaveTriggered(player));
-			events.publishEvent(new ChaosEvent("wave", Map.of("by", player.name())));
+			events.publishEvent(new ChaosEvent(ChaosEvent.WAVE, Map.of("by", player.name())));
 			mutators.startRandom();
 		}
 		else if (level < WAVE_REARM_LEVEL) {
-			waveArmed.set(true);
+			room.rearmWave();
 		}
 		return view.in(lang);
 	}
