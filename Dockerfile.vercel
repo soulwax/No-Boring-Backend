@@ -1,0 +1,16 @@
+# Built by Vercel as the "backend" container service (see ../vercel.json)
+FROM maven:3.10.0-eclipse-temurin-27 AS build
+WORKDIR /src
+COPY pom.xml .
+RUN mvn -B -q dependency:go-offline
+COPY src src
+RUN mvn -B -q package -DskipTests
+
+FROM eclipse-temurin:27-jre-alpine
+WORKDIR /app
+COPY --from=build /src/target/backend-0.0.1-SNAPSHOT.jar app.jar
+# Vercel routes traffic to port 80 unless PORT is overridden in project settings
+ENV PORT=80
+EXPOSE 80
+# Containers scale to zero, so favor fast startup over peak throughput
+ENTRYPOINT ["java", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-jar", "/app/app.jar"]
