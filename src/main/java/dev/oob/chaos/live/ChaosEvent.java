@@ -51,6 +51,14 @@ public record ChaosEvent(String type, @Nullable Object payload) {
 		return new ChaosEvent(THING, thing);
 	}
 
+	public static ChaosEvent activity(Object activity) {
+		return new ChaosEvent(ACTIVITY, activity);
+	}
+
+	public static ChaosEvent achievement(Object achievement) {
+		return new ChaosEvent(ACHIEVEMENT, achievement);
+	}
+
 	public boolean derived() {
 		return payload == null;
 	}

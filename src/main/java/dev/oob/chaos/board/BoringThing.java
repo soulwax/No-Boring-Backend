@@ -55,6 +55,22 @@ public class BoringThing {
 	@Column(nullable = false, length = 2000)
 	private List<String> lore = List.of();
 
+	@Column(length = 512)
+	private @Nullable String imageUrl;
+
+	@Convert(converter = LinesConverter.class)
+	@Column(name = "quest_steps", nullable = false, length = 1000)
+	private List<String> questSteps = List.of();
+
+	@Column(name = "estimated_minutes", nullable = false)
+	private int estimatedMinutes = 15;
+
+	@Column(name = "slayed_at")
+	private @Nullable Instant slayedAt;
+
+	@Column(name = "slayed_by", length = 40)
+	private @Nullable String slayedBy;
+
 	@Column(nullable = false)
 	private Instant createdAt;
 
@@ -148,6 +164,48 @@ public class BoringThing {
 
 	public Instant getCreatedAt() {
 		return createdAt;
+	}
+
+	public @Nullable String getImageUrl() {
+		return imageUrl;
+	}
+
+	public void setImageUrl(@Nullable String imageUrl) {
+		this.imageUrl = imageUrl;
+	}
+
+	public List<String> getQuestSteps() {
+		return questSteps;
+	}
+
+	public int getEstimatedMinutes() {
+		return estimatedMinutes;
+	}
+
+	public void setQuestDetails(List<String> steps, int estimatedMinutes) {
+		this.questSteps = List.copyOf(steps);
+		this.estimatedMinutes = Math.max(5, estimatedMinutes);
+	}
+
+	public @Nullable Instant getSlayedAt() {
+		return slayedAt;
+	}
+
+	public @Nullable String getSlayedBy() {
+		return slayedBy;
+	}
+
+	public boolean isSlayed() {
+		return slayedAt != null;
+	}
+
+	public boolean slay(String playerDisplayName) {
+		if (this.slayedAt != null) {
+			return false;
+		}
+		this.slayedAt = Instant.now();
+		this.slayedBy = playerDisplayName;
+		return true;
 	}
 
 }

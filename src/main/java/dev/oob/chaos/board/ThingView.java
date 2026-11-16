@@ -16,15 +16,25 @@ import dev.oob.chaos.twist.Genre;
  * @param nextTierAt hype needed for the next tier, or {@code null} at the top
  */
 public record ThingView(Long id, String original, String twist, String author, Genre genre, int hype,
-		int rerolls, Tier tier, Tier peakTier, @Nullable Integer nextTierAt, List<String> lore, Instant createdAt) {
+		int rerolls, Tier tier, Tier peakTier, @Nullable Integer nextTierAt, List<String> lore, Instant createdAt,
+		@Nullable String imageUrl, List<String> questSteps, int estimatedMinutes, @Nullable Instant slayedAt,
+		@Nullable String slayedBy) {
 
-	static ThingView of(BoringThing thing, Lang lang) {
+	public ThingView(Long id, String original, String twist, String author, Genre genre, int hype,
+			int rerolls, Tier tier, Tier peakTier, @Nullable Integer nextTierAt, List<String> lore, Instant createdAt) {
+		this(id, original, twist, author, genre, hype, rerolls, tier, peakTier, nextTierAt, lore, createdAt,
+				null, List.of(), 15, null, null);
+	}
+
+	public static ThingView of(BoringThing thing, Lang lang) {
 		Tier tier = Tier.forHype(thing.getHype());
 		Integer nextTierAt = tier.next().map(Tier::threshold).orElse(null);
 		return new ThingView(thing.getId(), thing.getOriginal(),
 				thing.getTwist().in(lang, thing.getGenre(), thing.getOriginal()), thing.getAuthor(), thing.getGenre(),
 				thing.getHype(), thing.getRerolls(), tier, thing.getPeakTier(), nextTierAt,
-				thing.getLore().stream().map(line -> line.in(lang)).toList(), thing.getCreatedAt());
+				thing.getLore().stream().map(line -> line.in(lang)).toList(), thing.getCreatedAt(),
+				thing.getImageUrl(), thing.getQuestSteps(), thing.getEstimatedMinutes(), thing.getSlayedAt(),
+				thing.getSlayedBy());
 	}
 
 }

@@ -57,6 +57,10 @@ public class PlayerProgress {
 
 	boolean nightOwl;
 
+	int slayedCount;
+
+	int slayerXp;
+
 	@ElementCollection(fetch = FetchType.EAGER)
 	@CollectionTable(name = "player_achievement", joinColumns = @JoinColumn(name = "player_id"))
 	@MapKeyColumn(name = "code", length = 40)
@@ -90,6 +94,8 @@ public class PlayerProgress {
 		mutatorHypes += guest.mutatorHypes;
 		triggeredWave |= guest.triggeredWave;
 		nightOwl |= guest.nightOwl;
+		slayedCount += guest.slayedCount;
+		slayerXp += guest.slayerXp;
 		guest.genres.forEach(this::addGenre);
 		guest.unlocked.forEach((a, at) -> unlocked.merge(a, at, (mine, theirs) -> mine.isBefore(theirs) ? mine : theirs));
 	}
@@ -105,6 +111,14 @@ public class PlayerProgress {
 
 	int genreCount() {
 		return genres.size();
+	}
+
+	public int slayedCount() {
+		return slayedCount;
+	}
+
+	public int slayerXp() {
+		return slayerXp;
 	}
 
 	boolean has(Achievement achievement) {

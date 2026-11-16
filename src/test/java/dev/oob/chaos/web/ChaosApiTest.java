@@ -145,7 +145,7 @@ class ChaosApiTest {
 				.header("API-Version", "2"))
 			// At least one: run this after midnight and Insomniac joins in
 			.andExpect(jsonPath("$.unlocked").value(greaterThanOrEqualTo(1)))
-			.andExpect(jsonPath("$.total").value(11))
+			.andExpect(jsonPath("$.total").value(13))
 			.andExpect(jsonPath("$.trophies[?(@.code == 'BOREDOM_SLAYER')].unlockedAt").isNotEmpty())
 			.andExpect(jsonPath("$.trophies[?(@.code == 'HYPE_MACHINE' && @.unlockedAt == null)]").isNotEmpty());
 

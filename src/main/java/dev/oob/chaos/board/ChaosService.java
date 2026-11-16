@@ -15,6 +15,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import dev.oob.chaos.edge.EdgeAiClient;
 import dev.oob.chaos.i18n.Lang;
 import dev.oob.chaos.i18n.Localized;
 import dev.oob.chaos.live.ChaosEvent;
@@ -54,6 +55,8 @@ public class ChaosService {
 
 	private final MutatorDirector mutators;
 
+	private final EdgeAiClient edgeAi;
+
 	private final ApplicationEventPublisher events;
 
 	private final RoomState room;
@@ -63,11 +66,13 @@ public class ChaosService {
 	private final Duration decayInterval;
 
 	public ChaosService(BoringThingRepository things, TwistEngine twistEngine, MutatorDirector mutators,
+			EdgeAiClient edgeAi,
 			ApplicationEventPublisher events, RoomState room, Clock clock,
 			@Value("${chaos.decay-interval}") Duration decayInterval) {
 		this.things = things;
 		this.twistEngine = twistEngine;
 		this.mutators = mutators;
+		this.edgeAi = edgeAi;
 		this.events = events;
 		this.room = room;
 		this.clock = clock;
@@ -95,8 +100,12 @@ public class ChaosService {
 		String name = (author == null || author.isBlank()) ? player.name() : author.strip();
 		Genre genre = mutators.lockedGenre()
 			.orElseGet(() -> requested != null ? requested : twistEngine.pickFrom(GENRES));
-		BoringThing thing = things.save(
-				new BoringThing(original.strip(), twistEngine.roll(genre), name, genre, player.id()));
+		BoringThing thing = new BoringThing(original.strip(), twistEngine.roll(genre), name, genre, player.id());
+		var enhancement = edgeAi.enhanceQuest(original.strip(), genre, lang);
+		if (enhancement != null && enhancement.microSteps() != null) {
+			thing.setQuestDetails(enhancement.microSteps(), enhancement.estimatedMinutes());
+		}
+		thing = things.save(thing);
 		return changed(thing, player, lang, PlayerAction.Kind.SUBMIT, null);
 	}
 
@@ -109,6 +118,13 @@ public class ChaosService {
 			thing.retwist(twistEngine.roll(genreFor(thing)));
 		}
 		Tier promoted = thing.evolve(this::loreFor).orElse(null);
+		if (promoted == Tier.MYTHIC && thing.getImageUrl() == null) {
+			String prompt = "Cinematic mythical illustration of " + thing.getOriginal() + " in " + thing.getGenre().name() + " visual style";
+			var art = edgeAi.generateArtwork(thing.getId(), prompt);
+			if (art.success() && art.url() != null) {
+				thing.setImageUrl(art.url());
+			}
+		}
 		return changed(thing, player, lang, PlayerAction.Kind.HYPE, promoted);
 	}
 

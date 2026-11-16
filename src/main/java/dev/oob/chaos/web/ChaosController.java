@@ -23,6 +23,8 @@ import dev.oob.chaos.achievements.TrophyShelf;
 import dev.oob.chaos.board.ChaosMeter;
 import dev.oob.chaos.board.ChaosService;
 import dev.oob.chaos.board.ThingView;
+import dev.oob.chaos.quest.QuestService;
+import dev.oob.chaos.quest.QuestService.QuestOverview;
 import dev.oob.chaos.i18n.Lang;
 import dev.oob.chaos.live.ChaosBroadcaster;
 import dev.oob.chaos.player.Player;
@@ -37,10 +39,13 @@ class ChaosController {
 
 	private final AchievementTracker achievements;
 
-	ChaosController(ChaosService chaos, ChaosBroadcaster broadcaster, AchievementTracker achievements) {
+	private final QuestService quests;
+
+	ChaosController(ChaosService chaos, ChaosBroadcaster broadcaster, AchievementTracker achievements, QuestService quests) {
 		this.chaos = chaos;
 		this.broadcaster = broadcaster;
 		this.achievements = achievements;
+		this.quests = quests;
 	}
 
 	@GetMapping("/things")
@@ -62,6 +67,29 @@ class ChaosController {
 	@PostMapping("/things/{id}/reroll")
 	ThingView reroll(@PathVariable long id, Player player, Lang lang) {
 		return chaos.reroll(id, player, lang);
+	}
+
+	@PostMapping("/things/{id}/slay")
+	ThingView slay(@PathVariable long id, Player player, Lang lang) {
+		return quests.slay(id, player, lang);
+	}
+
+	@PostMapping("/things/{id}/visualize")
+	ThingView visualize(@PathVariable long id, Player player, Lang lang) {
+		return quests.visualize(id, player, lang);
+	}
+
+	@GetMapping(value = "/things/{id}/calendar.ics", produces = "text/calendar;charset=UTF-8")
+	ResponseEntity<String> calendarIcs(@PathVariable long id, Lang lang) {
+		String ics = quests.exportIcs(id, lang);
+		return ResponseEntity.ok()
+				.header("Content-Disposition", "attachment; filename=\"quest-" + id + ".ics\"")
+				.body(ics);
+	}
+
+	@GetMapping("/quests")
+	QuestOverview quests(Player player, Lang lang) {
+		return quests.getOverview(player, lang);
 	}
 
 	@GetMapping("/meter")

@@ -10,6 +10,10 @@ public interface BoringThingRepository extends JpaRepository<BoringThing, Long> 
 
 	List<BoringThing> findTop50ByOrderByHypeDescCreatedAtDesc();
 
+	List<BoringThing> findByPlayerIdOrderByCreatedAtDesc(String playerId);
+
+	List<BoringThing> findTop20BySlayedAtIsNotNullOrderBySlayedAtDesc();
+
 	@Query("select coalesce(sum(t.hype), 0) from BoringThing t")
 	long totalHype();
 

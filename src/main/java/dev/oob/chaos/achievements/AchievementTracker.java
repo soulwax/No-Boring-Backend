@@ -68,6 +68,30 @@ public class AchievementTracker {
 		});
 	}
 
+	@Transactional
+	public void recordSlay(String playerId, int xpAward) {
+		progress.ensureExists(playerId);
+		PlayerProgress mine = progress.lock(playerId).orElseThrow();
+		mine.record(p -> {
+			p.slayedCount++;
+			p.slayerXp += xpAward;
+		}, clock.instant())
+			.forEach(a -> events.publishEvent(ChaosEvent.achievement(
+					Localized.of(lang -> AchievementUnlocked.of(new Player(playerId, Player.defaultName(lang)), a, lang)))));
+	}
+
+	@Transactional(readOnly = true)
+	public int slayedCount(@Nullable String playerId) {
+		if (playerId == null) return 0;
+		return progress.findById(playerId).map(PlayerProgress::slayedCount).orElse(0);
+	}
+
+	@Transactional(readOnly = true)
+	public int slayerXp(@Nullable String playerId) {
+		if (playerId == null) return 0;
+		return progress.findById(playerId).map(PlayerProgress::slayerXp).orElse(0);
+	}
+
 	@EventListener
 	@Transactional
 	void on(WaveTriggered wave) {

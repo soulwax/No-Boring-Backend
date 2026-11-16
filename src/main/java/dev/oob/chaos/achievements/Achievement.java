@@ -35,7 +35,13 @@ public enum Achievement {
 			p -> p.mutatorHypes >= 1),
 	INSOMNIAC("🦉", of("Schlaflos", "Insomniac"),
 			of("Bekämpfe die Langeweile zwischen Mitternacht und 5 Uhr früh", "Fight boredom between midnight and 5 a.m."),
-			p -> p.nightOwl);
+			p -> p.nightOwl),
+	CHORE_SLAYER("⚔️", of("Aufgaben-Bezwinger", "Chore Slayer"),
+			of("Erledige deine erste reale Aufgabe", "Slay your first real-world chore"),
+			p -> p.slayedCount >= 1),
+	PRODUCTIVITY_BEAST("👑", of("Produktivitäts-Titan", "Productivity Titan"),
+			of("Erledige 3 reale Aufgaben und verdiene XP", "Slay 3 real-world chores and earn XP"),
+			p -> p.slayedCount >= 3);
 
 	private final String emoji;
 
